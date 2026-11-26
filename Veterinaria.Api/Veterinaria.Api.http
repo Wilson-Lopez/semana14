@@ -1,0 +1,418 @@
+### Pruebas de la API Veterinaria con JWT (ejecutar en orden, con los datos recién cargados por VeterinariaDB.sql)
+### Usuarios del script: recepcion@veterinaria.pe / Recepcion2026!  y  veterinario@veterinaria.pe / Veterinario2026!
+@Host = http://localhost:5169
+@tokenRecepcionista = {{loginRecepcionista.response.body.$.token}}
+@tokenVeterinario = {{loginVeterinario.response.body.$.token}}
+
+############ AUTENTICACIÓN ############
+
+### 201 - Registro (público; el servidor asigna el rol Recepcionista)
+POST {{Host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "correo": "mostrador@veterinaria.pe",
+  "clave": "Mostrador2026!"
+}
+
+### 400 - Registro con datos inválidos (correo sin @ y clave corta)
+POST {{Host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "correo": "correo-sin-arroba",
+  "clave": "123"
+}
+
+### 409 - Registro con correo repetido (regla de negocio)
+POST {{Host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "correo": "recepcion@veterinaria.pe",
+  "clave": "OtraClave2026!"
+}
+
+### 200 - Login Recepcionista (devuelve el token)
+# @name loginRecepcionista
+POST {{Host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "recepcion@veterinaria.pe",
+  "clave": "Recepcion2026!"
+}
+
+### 200 - Login Veterinario (devuelve el token)
+# @name loginVeterinario
+POST {{Host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "veterinario@veterinaria.pe",
+  "clave": "Veterinario2026!"
+}
+
+### 401 - Login con clave incorrecta
+POST {{Host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "recepcion@veterinaria.pe",
+  "clave": "ClaveEquivocada1"
+}
+
+### 401 - Login con correo que no existe (misma respuesta que la clave incorrecta)
+POST {{Host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "nadie@veterinaria.pe",
+  "clave": "Recepcion2026!"
+}
+
+### 200 - Perfil Recepcionista (correo y rol leídos de los claims del token)
+GET {{Host}}/api/auth/perfil
+Authorization: Bearer {{tokenRecepcionista}}
+
+### 200 - Perfil Veterinario
+GET {{Host}}/api/auth/perfil
+Authorization: Bearer {{tokenVeterinario}}
+
+### 401 - Perfil sin token
+GET {{Host}}/api/auth/perfil
+
+### 401 - Perfil con el token del Veterinario alterado (la firma ya no coincide)
+GET {{Host}}/api/auth/perfil
+Authorization: Bearer {{tokenVeterinario}}x
+
+############ PROPIETARIOS (leer: autenticado; crear, editar y eliminar: Recepcionista) ############
+
+### 401 - Listar propietarios sin token
+GET {{Host}}/api/propietarios
+
+### 200 - Listar propietarios (Veterinario)
+GET {{Host}}/api/propietarios
+Authorization: Bearer {{tokenVeterinario}}
+
+### 200 - Filtro por query string: nombres (Recepcionista)
+GET {{Host}}/api/propietarios?nombres=Rojas
+Authorization: Bearer {{tokenRecepcionista}}
+
+### 200 - Filtro por query string: DNI que empieza con 7 (Recepcionista)
+GET {{Host}}/api/propietarios?dni=7
+Authorization: Bearer {{tokenRecepcionista}}
+
+### 200 - Obtener propietario (Veterinario)
+GET {{Host}}/api/propietarios/1
+Authorization: Bearer {{tokenVeterinario}}
+
+### 404 - Propietario inexistente (Recepcionista)
+GET {{Host}}/api/propietarios/999
+Authorization: Bearer {{tokenRecepcionista}}
+
+### 200 - Ruta anidada: mascotas del propietario (Veterinario)
+GET {{Host}}/api/propietarios/1/mascotas
+Authorization: Bearer {{tokenVeterinario}}
+
+### 404 - Ruta anidada con propietario inexistente (Recepcionista)
+GET {{Host}}/api/propietarios/999/mascotas
+Authorization: Bearer {{tokenRecepcionista}}
+
+### 201 - Crear propietario (Recepcionista)
+# @name nuevoPropietario
+POST {{Host}}/api/propietarios
+Authorization: Bearer {{tokenRecepcionista}}
+Content-Type: application/json
+
+{
+  "nombres": "Rosa María Gutiérrez León",
+  "dni": "43218765",
+  "telefono": "978456123",
+  "correo": "rosa.gutierrez@correo.pe"
+}
+
+### 403 - Crear propietario con el rol Veterinario
+POST {{Host}}/api/propietarios
+Authorization: Bearer {{tokenVeterinario}}
+Content-Type: application/json
+
+{
+  "nombres": "Jorge Luis Paredes Salazar",
+  "dni": "40567891",
+  "telefono": "934567812"
+}
+
+### 401 - Crear propietario sin token
+POST {{Host}}/api/propietarios
+Content-Type: application/json
+
+{
+  "nombres": "Jorge Luis Paredes Salazar",
+  "dni": "40567891",
+  "telefono": "934567812"
+}
+
+### 400 - Crear propietario con datos inválidos (Recepcionista)
+POST {{Host}}/api/propietarios
+Authorization: Bearer {{tokenRecepcionista}}
+Content-Type: application/json
+
+{
+  "dni": "123",
+  "telefono": "978456123",
+  "correo": "rosa.correo.pe"
+}
+
+### 409 - Regla de negocio: DNI repetido (Recepcionista)
+POST {{Host}}/api/propietarios
+Authorization: Bearer {{tokenRecepcionista}}
+Content-Type: application/json
+
+{
+  "nombres": "Otra Persona",
+  "dni": "45879632",
+  "telefono": "900000000"
+}
+
+### 204 - Actualizar propietario (Recepcionista)
+PUT {{Host}}/api/propietarios/{{nuevoPropietario.response.body.$.id}}
+Authorization: Bearer {{tokenRecepcionista}}
+Content-Type: application/json
+
+{
+  "nombres": "Rosa María Gutiérrez León",
+  "telefono": "999888777",
+  "correo": "rosa.gutierrez@veterinaria.pe"
+}
+
+### 403 - Actualizar propietario con el rol Veterinario
+PUT {{Host}}/api/propietarios/{{nuevoPropietario.response.body.$.id}}
+Authorization: Bearer {{tokenVeterinario}}
+Content-Type: application/json
+
+{
+  "nombres": "Rosa María Gutiérrez León",
+  "telefono": "911111111"
+}
+
+### 400 - Actualizar propietario con datos inválidos (Recepcionista)
+PUT {{Host}}/api/propietarios/{{nuevoPropietario.response.body.$.id}}
+Authorization: Bearer {{tokenRecepcionista}}
+Content-Type: application/json
+
+{
+  "nombres": "Ro"
+}
+
+### 404 - Actualizar propietario inexistente (Recepcionista)
+PUT {{Host}}/api/propietarios/999
+Authorization: Bearer {{tokenRecepcionista}}
+Content-Type: application/json
+
+{
+  "nombres": "Nadie",
+  "telefono": "900000000"
+}
+
+### 409 - Regla de negocio: no se elimina un propietario con mascotas (Recepcionista)
+DELETE {{Host}}/api/propietarios/1
+Authorization: Bearer {{tokenRecepcionista}}
+
+### 403 - Eliminar propietario con el rol Veterinario
+DELETE {{Host}}/api/propietarios/{{nuevoPropietario.response.body.$.id}}
+Authorization: Bearer {{tokenVeterinario}}
+
+### 204 - Eliminar propietario sin mascotas (Recepcionista)
+DELETE {{Host}}/api/propietarios/{{nuevoPropietario.response.body.$.id}}
+Authorization: Bearer {{tokenRecepcionista}}
+
+### 404 - Eliminar propietario inexistente (Recepcionista)
+DELETE {{Host}}/api/propietarios/999
+Authorization: Bearer {{tokenRecepcionista}}
+
+############ MASCOTAS (leer y crear: autenticado; editar y eliminar: Veterinario) ############
+
+### 401 - Listar mascotas sin token
+GET {{Host}}/api/mascotas
+
+### 200 - Listar mascotas (Recepcionista)
+GET {{Host}}/api/mascotas
+Authorization: Bearer {{tokenRecepcionista}}
+
+### 200 - Filtro por query string: especie (Veterinario)
+GET {{Host}}/api/mascotas?especie=Perro
+Authorization: Bearer {{tokenVeterinario}}
+
+### 200 - Filtro por query string: especie y raza (Recepcionista)
+GET {{Host}}/api/mascotas?especie=Gato&raza=Persa
+Authorization: Bearer {{tokenRecepcionista}}
+
+### 200 - Obtener mascota (Veterinario)
+GET {{Host}}/api/mascotas/1
+Authorization: Bearer {{tokenVeterinario}}
+
+### 404 - Mascota inexistente (Recepcionista)
+GET {{Host}}/api/mascotas/999
+Authorization: Bearer {{tokenRecepcionista}}
+
+### 201 - Crear mascota (Recepcionista)
+# @name nuevaMascota
+POST {{Host}}/api/mascotas
+Authorization: Bearer {{tokenRecepcionista}}
+Content-Type: application/json
+
+{
+  "nombre": "Max",
+  "especie": "Perro",
+  "raza": "Schnauzer",
+  "fechaNacimiento": "2024-08-12",
+  "peso": 7.5,
+  "propietarioId": 2
+}
+
+### 201 - Crear mascota (Veterinario: crear solo exige estar autenticado)
+# @name mascotaDelVeterinario
+POST {{Host}}/api/mascotas
+Authorization: Bearer {{tokenVeterinario}}
+Content-Type: application/json
+
+{
+  "nombre": "Nube",
+  "especie": "Gato",
+  "fechaNacimiento": "2023-03-01",
+  "peso": 3.2,
+  "propietarioId": 5
+}
+
+### 400 - Crear mascota con datos inválidos (Veterinario)
+POST {{Host}}/api/mascotas
+Authorization: Bearer {{tokenVeterinario}}
+Content-Type: application/json
+
+{
+  "especie": "Perro",
+  "peso": 0
+}
+
+### 400 - Propietario inexistente, lo detecta la capa de Negocio (Recepcionista)
+POST {{Host}}/api/mascotas
+Authorization: Bearer {{tokenRecepcionista}}
+Content-Type: application/json
+
+{
+  "nombre": "Nube",
+  "especie": "Gato",
+  "fechaNacimiento": "2023-03-01",
+  "peso": 3.2,
+  "propietarioId": 999
+}
+
+### 400 - Fecha de nacimiento futura, lo detecta la capa de Negocio (Recepcionista)
+POST {{Host}}/api/mascotas
+Authorization: Bearer {{tokenRecepcionista}}
+Content-Type: application/json
+
+{
+  "nombre": "Nube",
+  "especie": "Gato",
+  "fechaNacimiento": "2030-01-01",
+  "peso": 3.2,
+  "propietarioId": 2
+}
+
+### 409 - Regla de negocio: el propietario ya tiene una mascota con ese nombre (Veterinario)
+POST {{Host}}/api/mascotas
+Authorization: Bearer {{tokenVeterinario}}
+Content-Type: application/json
+
+{
+  "nombre": "Firulais",
+  "especie": "Perro",
+  "fechaNacimiento": "2024-01-20",
+  "peso": 10,
+  "propietarioId": 1
+}
+
+### 403 - Actualizar mascota con el rol Recepcionista
+PUT {{Host}}/api/mascotas/{{nuevaMascota.response.body.$.id}}
+Authorization: Bearer {{tokenRecepcionista}}
+Content-Type: application/json
+
+{
+  "nombre": "Max",
+  "especie": "Perro",
+  "raza": "Schnauzer miniatura",
+  "fechaNacimiento": "2024-08-12",
+  "peso": 8.1,
+  "propietarioId": 2
+}
+
+### 204 - Actualizar mascota (Veterinario)
+PUT {{Host}}/api/mascotas/{{nuevaMascota.response.body.$.id}}
+Authorization: Bearer {{tokenVeterinario}}
+Content-Type: application/json
+
+{
+  "nombre": "Max",
+  "especie": "Perro",
+  "raza": "Schnauzer miniatura",
+  "fechaNacimiento": "2024-08-12",
+  "peso": 8.1,
+  "propietarioId": 2
+}
+
+### 400 - Actualizar mascota con datos inválidos (Veterinario)
+PUT {{Host}}/api/mascotas/{{nuevaMascota.response.body.$.id}}
+Authorization: Bearer {{tokenVeterinario}}
+Content-Type: application/json
+
+{
+  "nombre": "Max",
+  "especie": "P",
+  "fechaNacimiento": "2024-08-12",
+  "peso": 500,
+  "propietarioId": 2
+}
+
+### 404 - Actualizar mascota inexistente (Veterinario)
+PUT {{Host}}/api/mascotas/999
+Authorization: Bearer {{tokenVeterinario}}
+Content-Type: application/json
+
+{
+  "nombre": "Max",
+  "especie": "Perro",
+  "fechaNacimiento": "2024-08-12",
+  "peso": 8.1,
+  "propietarioId": 2
+}
+
+### 409 - Regla de negocio: el propietario 2 ya tiene otra mascota llamada Rocky (Veterinario)
+PUT {{Host}}/api/mascotas/{{nuevaMascota.response.body.$.id}}
+Authorization: Bearer {{tokenVeterinario}}
+Content-Type: application/json
+
+{
+  "nombre": "Rocky",
+  "especie": "Perro",
+  "fechaNacimiento": "2024-08-12",
+  "peso": 8.1,
+  "propietarioId": 2
+}
+
+### 403 - Eliminar mascota con el rol Recepcionista
+DELETE {{Host}}/api/mascotas/{{nuevaMascota.response.body.$.id}}
+Authorization: Bearer {{tokenRecepcionista}}
+
+### 204 - Eliminar mascota (Veterinario)
+DELETE {{Host}}/api/mascotas/{{nuevaMascota.response.body.$.id}}
+Authorization: Bearer {{tokenVeterinario}}
+
+### 204 - Eliminar la mascota creada por el Veterinario (Veterinario)
+DELETE {{Host}}/api/mascotas/{{mascotaDelVeterinario.response.body.$.id}}
+Authorization: Bearer {{tokenVeterinario}}
+
+### 404 - Eliminar mascota inexistente (Veterinario)
+DELETE {{Host}}/api/mascotas/999
+Authorization: Bearer {{tokenVeterinario}}
